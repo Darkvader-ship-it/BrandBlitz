@@ -229,6 +229,63 @@ Link your new runbook from the `docs/runbooks/README.md` index.
 
 ---
 
+## Gitleaks false positives
+
+Commits are blocked by [`scripts/gitleaks.mjs`](../scripts/gitleaks.mjs) via the
+[`.husky/pre-commit`](../.husky/pre-commit) hook (`pnpm gitleaks:pre-commit` — pipes
+`git diff --cached` into `gitleaks detect --pipe --redact --config .gitleaks.toml`).
+If a fixture or test value that *looks* like a secret triggers a false positive (e.g.
+a Stellar `S...` key in a test fixture), add a scoped allowlist entry to
+[`.gitleaks.toml`](../.gitleaks.toml) instead of bypassing the hook.
+
+### Allowlist syntax (`.gitleaks.toml`)
+
+Gitleaks uses TOML. Add a per-rule `[[rules.allowlist]]` (or a global `[allowlist]`)
+with a `description`, `regexes`/`regex`, and/or `paths`. Keep the entry as narrow
+as possible — pin it to a single file/path and a single secret-looking pattern.
+
+**Concrete example — allow a fake Stellar secret only inside test fixtures:**
+
+```toml
+# .gitleaks.toml
+[[rules]]
+id = "stellar-secret-key"
+description = "Stellar secret key (S...)"
+regex = '''\bS[ABCDEFGHIJKLMNOPQRSTUVWXYZ234567]{55}\b'''
+tags = ["stellar", "secret"]
+
+  [[rules.allowlist]]
+  description = "test fixture with fake S... key — not a real secret"
+  # Only suppress inside fixtures; change the path to the file that holds the false positive.
+  paths = ['''apps/api/scripts/fixtures/.*''']
+  # Optionally pin to the exact fake value:
+  # regexes = ['''SBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB''']
+```
+
+Alternative global form (use sparingly):
+
+```toml
+[allowlist]
+description = "allow fake keys in fixtures"
+paths = ['''apps/api/scripts/fixtures/.*''']
+```
+
+After editing `.gitleaks.toml`, re-stage the config and retry the commit — the
+pre-commit hook (`scripts/gitleaks.mjs`) will re-run automatically.
+
+### Do not use `--no-verify`
+
+> **Git Safety Protocol:** never bypass commit hooks with `git commit --no-verify`
+> (or `HUSKY=0`) to silence a gitleaks finding. That disables secret scanning for
+> the entire commit and risks landing a real credential. Always add a scoped
+> allowlist entry as shown above and keep the hook enabled.
+
+See also: [`scripts/gitleaks.mjs`](../scripts/gitleaks.mjs) (binary download + invocation),
+[`.gitleaks.toml`](../.gitleaks.toml) (rule definitions), and
+[`docs/runbooks/leaked-secret.md`](../docs/runbooks/leaked-secret.md) (what to do if a real secret leaked).
+
+---
+
 ## Getting Started
 
 ```bash
@@ -265,6 +322,29 @@ pnpm test
 pnpm type-check
 pnpm lint
 ```
+
+### Fast feedback while iterating (recommended)
+
+For iterative work on a single package, use watch-mode type-checking instead of the full
+monorepo `pnpm type-check`. It runs `tsc --watch --noEmit` in the selected workspace
+and re-checks incrementally on every save:
+
+```bash
+# API only
+pnpm type-check:watch --filter=@brandblitz/api
+
+# Web only
+pnpm type-check:watch --filter=@brandblitz/web
+# Or directly in the workspace:
+pnpm --filter @brandblitz/api type-check:watch
+pnpm --filter @brandblitz/web type-check:watch
+```
+
+The root `type-check:watch` script is a convenience wrapper around `turbo run type-check:watch`
+filtered with `--filter`; pass a different `--filter` value to scope to another workspace.
+Each workspace exposes `type-check:watch` as `tsc --watch --noEmit` (see `apps/api/package.json`
+and `apps/web/package.json`). The existing full `pnpm type-check` (`turbo run type-check`) is unchanged
+and remains the CI gate — use the watch variant only for local iteration.
 
 ### Common Issues
 

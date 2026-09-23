@@ -14,6 +14,7 @@
     "migrate:down": "tsx scripts/migrate.ts down",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --watch --noEmit",
     "docs:db": "cd ../../ && pnpm docs:db",
     "test": "corepack pnpm exec vitest run",
     "seed": "tsx scripts/seed.ts",
