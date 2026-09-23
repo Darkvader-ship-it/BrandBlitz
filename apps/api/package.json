@@ -15,6 +15,7 @@
     "migrate": "tsx scripts/migrate.ts up",
     "migrate:dryrun": "tsx scripts/migrate.ts dryrun",
     "migrate:down": "tsx scripts/migrate.ts down",
+    "migrate:lint": "tsx scripts/migrate.ts lint",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --watch --noEmit",

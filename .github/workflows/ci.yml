@@ -138,6 +138,8 @@ jobs:
         run: pnpm --filter @brandblitz/api migrate:dryrun
         env:
           DATABASE_URL: postgresql://brandblitz:brandblitz_dev@localhost:5432/brandblitz_test
+      - name: Lint migration filenames
+        run: pnpm --filter @brandblitz/api migrate:lint
       - run: pnpm --filter @brandblitz/api test
 
   test-web:

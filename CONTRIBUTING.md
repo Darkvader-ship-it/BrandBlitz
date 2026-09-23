@@ -99,7 +99,7 @@ Commits that do not follow Conventional Commits will fail the commit-message lin
 4. **Type-check must pass.** Run `pnpm type-check` locally before pushing.
 5. **Lint must pass.** Run `pnpm lint` locally. The CI gate rejects any ESLint errors.
 6. **No `console.log` in production code.** Use the structured logger (`apps/api/src/lib/logger.ts`) in the API, and `console.error` only for unrecoverable startup errors.
-7. **Keep `.env.example` in sync.** If you add a new environment variable, add it to `.env.example` with an inline comment and update the table in `README.md`.
+7. **Keep `.env.example` in sync.** If you add a new environment variable, add it to `.env.example` with an inline comment and add a row to the Environment Variables table in [`README.md`](./README.md#environment-variables) (Name, Required, Default, Description).
 
 ### PR Description Template
 
@@ -197,6 +197,7 @@ BrandBlitz is built as part of the [Drips programme](https://drips.network). The
 1. **All Stellar integrations must run on testnet during development.** Set `STELLAR_NETWORK=testnet` in your `.env`. Never commit mainnet credentials.
 2. **Every PR that touches Stellar code must include a testnet transaction hash** in the PR description demonstrating the happy path works end-to-end. Use the `stellar-cli` or Stellar Laboratory to verify.
 3. **Payments are real even on testnet.** Use the testnet faucet (`friendbot`) to fund test wallets. Never use real USDC for local testing.
+   Run `STELLAR_NETWORK=testnet pnpm fund:testnet-wallet` (`scripts/fund-testnet-wallet.ts`) to generate a keypair and fund it via friendbot in one step — it refuses to run against any network other than testnet.
 4. **Smart contract changes require a separate PR.** Changes to `contracts/escrow/` must be reviewed by at least two maintainers and include both `cargo test` and `soroban-cli` deploy output.
 5. **Batch payouts must not exceed 50 ops per transaction.** The `MAX_OPS_PER_TX = 50` constant in `packages/stellar/src/constants.ts` is a hard limit — Stellar rejects transactions above this.
 6. **Do not change the escrow contract interface without a migration plan.** Breaking changes to `settle()` or `refund()` affect live brand deposits.
@@ -302,7 +303,7 @@ cp .env.example .env
 # STELLAR_HOT_WALLET_SECRET, and PHONE_HASH_SALT at minimum.
 
 # 4. Start infrastructure
-docker compose up postgres redis minio minio-setup
+docker compose --profile infra up
 
 # 4b. (Optional) Seed the database with fixture data — 50 users, 3 brands, 6 challenges, 200 sessions
 pnpm --filter @brandblitz/api seed
