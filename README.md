@@ -346,7 +346,7 @@ open http://localhost:9001         # MinIO console (brandblitz / brandblitz123)
 
 ```bash
 # Infrastructure in Docker, apps native
-docker compose up postgres redis minio minio-setup
+docker compose --profile infra up
 
 pnpm install
 cp .env.example .env  # update DATABASE_URL, REDIS_URL to localhost
@@ -430,23 +430,62 @@ Set `SEED_DEV=1` in your shell or `.env` and the API container will run the seed
 
 ## Environment Variables
 
-See [`.env.example`](./.env.example) for all variables with inline documentation. Minimum to get running:
+Kept in sync with [`.env.example`](./.env.example), the source of truth (inline comments there have the full rationale/rotation notes). Vars marked **Critical secret** must never be committed with real values.
 
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection string |
-| `JWT_SECRET` | Sign API JWTs (64+ chars in prod) |
-| `NEXTAUTH_SECRET` | next-auth session encryption |
-| `NEXTAUTH_URL` | Public URL of the web app |
-| `GOOGLE_CLIENT_ID/SECRET` | Google OAuth credentials |
-| `STELLAR_HOT_WALLET_SECRET` | Stellar keypair for payouts |
-| `STELLAR_NETWORK` | `testnet` or `public` |
-| `S3_*` | Storage endpoint, credentials, bucket (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`) |
-| `WEBHOOK_SECRET` | Protects `/webhooks/stellar` |
-| `PHONE_HASH_SALT` | HMAC salt for phone-number hashing (32-byte random) |
-| `SESSION_INTEGRITY_KEY` | HMAC key for session tamper-detection — generate with `openssl rand -hex 32` |
-| `NEXTAUTH_API_URL` | Internal URL next-auth uses to reach the API (e.g. `http://localhost/api`) |
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `PORT` | No | `3001` | API server port |
+| `NODE_ENV` | No | `development` | Node environment |
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string. **Critical secret.** |
+| `REDIS_URL` | No | `redis://localhost:6379` | Redis connection string |
+| `POSTGRES_PASSWORD` | No | `brandblitz_dev` | PostgreSQL superuser password. **Critical secret.** |
+| `SESSION_START_LOCKOUT_THRESHOLD` | No | `10` | Failed session-start attempts before lockout |
+| `SESSION_START_LOCKOUT_WINDOW_SECONDS` | No | `3600` | Lockout window, in seconds |
+| `JWT_SECRET` | Yes | — | Signs API JWTs (32+ chars). **Critical secret.** |
+| `JWT_ISSUER` | No | `brandblitz-api` | JWT issuer claim |
+| `JWT_AUDIENCE` | No | `brandblitz-client` | JWT audience claim |
+| `GOOGLE_CLIENT_ID` | Yes | — | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Yes | — | Google OAuth client secret. **Critical secret.** |
+| `WEB_URL` | No | `http://localhost:3000` | Public URL of the web app |
+| `GOOGLE_REDIRECT_URI` | No | `http://localhost:3000/api/auth/callback/google` | OAuth redirect URI |
+| `GOOGLE_OAUTH_PKCE_TTL_SECONDS` | No | `300` | PKCE code verifier TTL |
+| `REFERRER_POLICY` | No | `strict-origin-when-cross-origin` | `Referrer-Policy` header value |
+| `NEXTAUTH_SECRET` | Yes | — | next-auth session encryption. **Critical secret.** |
+| `NEXTAUTH_URL` | Yes | — | Public URL of the web app (next-auth) |
+| `NEXT_PUBLIC_API_URL` | Yes | — | Browser-facing API base URL |
+| `NEXTAUTH_API_URL` | Yes | — | Internal URL next-auth uses to reach the API (e.g. `http://api:3001`) |
+| `NEXT_PUBLIC_CDN_HOST` | No | — | CDN host for the CSP `img-src` directive |
+| `CDN_BASE_URL` | No | — | CDN base URL, overrides `S3_PUBLIC_URL` when set |
+| `NEXT_PUBLIC_FINGERPRINT_PUBLIC_KEY` | No | — | FingerprintJS Pro public key; fingerprinting disabled if unset |
+| `ALLOWED_ORIGINS` | Yes | — | Comma-separated CORS allow-list; API refuses to boot without it |
+| `STELLAR_NETWORK` | No | `testnet` | `testnet` or `public` |
+| `STELLAR_HORIZON_URL` | No | `https://horizon-testnet.stellar.org` | Horizon server URL |
+| `STELLAR_RPC_URL` | No | `https://soroban-testnet.stellar.org` | Soroban RPC URL |
+| `STELLAR_HOT_WALLET_SECRET` | Yes | — | Hot wallet secret key (`S...`) used for payouts. **Critical secret.** |
+| `HOT_WALLET_PUBLIC_KEY` | Yes | — | Hot wallet public key (`G...`) used for deposit detection |
+| `SOROBAN_CONTRACT_ID` | No | — | Escrow contract ID; falls back to direct transfers if unset |
+| `USDC_ISSUER` | No | testnet USDC issuer | USDC asset issuer account |
+| `WEBHOOK_SECRET` | Yes | — | Authenticates `/webhooks/stellar` and revalidation calls. **Critical secret.** |
+| `S3_ENDPOINT` | Yes | — | S3-compatible storage endpoint |
+| `S3_REGION` | No | `us-east-1` | Storage region |
+| `S3_ACCESS_KEY_ID` | Yes | — | Storage access key. **Critical secret.** |
+| `S3_SECRET_ACCESS_KEY` | Yes | — | Storage secret key. **Critical secret.** |
+| `S3_BUCKET` | No | `brandblitz-assets` | Default bucket name |
+| `S3_BUCKET_BRAND_ASSETS` | No | `brand-assets` | Brand asset uploads bucket |
+| `S3_BUCKET_SHARE_CARDS` | No | `share-cards` | Share-card renders bucket |
+| `S3_PUBLIC_URL` | No | — | Public URL prefix for stored objects |
+| `S3_FORCE_PATH_STYLE` | No | `true` | Path-style addressing (required for MinIO) |
+| `MINIO_ROOT_USER` | No | `minioadmin` | MinIO root user (docker-compose only) |
+| `MINIO_ROOT_PASSWORD` | No | `minioadmin` | MinIO root password. **Critical secret.** |
+| `TWILIO_ACCOUNT_SID` | No | — | Twilio account SID for phone verification |
+| `TWILIO_AUTH_TOKEN` | No | — | Twilio auth token. **Critical secret.** |
+| `TWILIO_VERIFY_SERVICE_SID` | No | — | Twilio Verify service SID |
+| `PHONE_HASH_SALT` | Yes | — | HMAC salt for phone-number hashing (32-byte random). **Critical secret.** |
+| `SESSION_INTEGRITY_KEY` | Yes | — | HMAC key for session tamper-detection — generate with `openssl rand -hex 32`. **Critical secret.** |
+| `ADMIN_BOOTSTRAP_EMAIL` | No | — | Grants admin role to this email on boot, if set |
+| `REVALIDATE_SECRET` | No | — | Shared secret for on-demand ISR revalidation |
+| `NEXT_REVALIDATE_URL` | No | `http://localhost:3000` | Web app URL used for revalidation calls |
+| `LOG_LEVEL` | No | `info` | `error` \| `warn` \| `info` \| `http` \| `verbose` \| `debug` \| `silly` |
 
 ---
 

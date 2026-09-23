@@ -13,6 +13,7 @@
     "type-check": "turbo run type-check",
     "type-check:watch": "turbo run type-check:watch",
     "setup:secrets": "tsx scripts/setup-dev-secrets.ts",
+    "fund:testnet-wallet": "tsx scripts/fund-testnet-wallet.ts",
     "validate-env-example": "tsx scripts/validate-env-example.ts",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\" --ignore-path .gitignore",
