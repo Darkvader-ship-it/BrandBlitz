@@ -282,6 +282,8 @@ brandblitz/
 └── .env.example      All required environment variables with documentation
 ```
 
+> **Workspace dependency graph:** see [`docs/architecture/workspace-graph.md`](./docs/architecture/workspace-graph.md) for which apps depend on which `packages/*` (verified against `package.json` `@brandblitz/*` deps) — e.g. `packages/stellar` changes affect `apps/api` and `apps/deposit-monitor`.
+
 ---
 
 ## Tech Stack

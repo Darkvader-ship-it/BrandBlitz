@@ -14,7 +14,6 @@ Thank you for contributing to BrandBlitz — the skill-validated attention marke
 - [Drips Wave 4 Rules](#drips-wave-4-rules)
 - [Issue Templates](#issue-templates)
 - [Operations Runbooks](#operations-runbooks)
-- [Dependency Version Consistency](#dependency-version-consistency)
 - [Getting Started](#getting-started)
 
 ---
@@ -102,18 +101,6 @@ Commits that do not follow Conventional Commits will fail the commit-message lin
 6. **No `console.log` in production code.** Use the structured logger (`apps/api/src/lib/logger.ts`) in the API, and `console.error` only for unrecoverable startup errors.
 7. **Keep `.env.example` in sync.** If you add a new environment variable, add it to `.env.example` with an inline comment and update the table in `README.md`.
 
-### Test Naming Convention
-
-Tests in `apps/api/src` must follow a consistent naming convention (see [RFC #1263](./docs/rfc/1263-test-naming-convention.md)):
-
-| Tier | Suffix | Dependencies | Speed | Examples |
-|------|--------|---|---|---|
-| **Unit** | `.unit.test.ts` | None (mocked) | <100ms | `fingerprint.unit.test.ts`, `scoring.engine.unit.test.ts` |
-| **Integration** | `.integration.test.ts` | DB, Redis, S3 | 100ms+ | `brands.create.integration.test.ts`, `session-timeout.integration.test.ts` |
-| **No suffix** | `.test.ts` | Deprecated | — | Only for small, isolated tests; new tests must use explicit suffix |
-
-**Guideline**: If your test needs the database, Redis, or file storage, use `.integration.test.ts`. Otherwise, use `.unit.test.ts`.
-
 ### PR Description Template
 
 ```markdown
@@ -132,7 +119,6 @@ Approach taken, notable design decisions, alternatives rejected.
 ## Test plan
 
 - [ ] Unit tests added / updated
-- [ ] Integration tests added / updated (if DB/Redis required)
 - [ ] Manual smoke test: describe what you clicked/ran
 
 ## Checklist
@@ -222,13 +208,13 @@ BrandBlitz is built as part of the [Drips programme](https://drips.network). The
 
 Use the appropriate issue template when opening a new issue (see issue [#60](../../issues/60)):
 
-| Template | When to use | File |
-|---|---|---|
-| **Bug report** | Something that was working and now isn't, or produces incorrect output | [`bug-report.yml`](.github/ISSUE_TEMPLATE/bug-report.yml) |
-| **Feature request** | New functionality or a change to existing behaviour | [`feature-request.yml`](.github/ISSUE_TEMPLATE/feature-request.yml) |
-| **Test coverage** | A module that lacks tests; specify the file and target coverage % | [`test-coverage.yml`](.github/ISSUE_TEMPLATE/test-coverage.yml) |
-| **Documentation** | Incorrect, outdated, or missing docs | [`documentation.yml`](.github/ISSUE_TEMPLATE/documentation.yml) |
-| **Chore / maintenance** | Dependency upgrades, tooling changes, CI fixes | [`chore.yml`](.github/ISSUE_TEMPLATE/chore.yml) |
+| Template | When to use |
+|---|---|
+| **Bug report** | Something that was working and now isn't, or produces incorrect output |
+| **Feature request** | New functionality or a change to existing behaviour |
+| **Test coverage** | A module that lacks tests; specify the file and target coverage % |
+| **Documentation** | Incorrect, outdated, or missing docs |
+| **Chore / maintenance** | Dependency upgrades, tooling changes, CI fixes |
 
 If no template fits, open a blank issue with at minimum: context, expected behaviour, and actual behaviour.
 
@@ -243,95 +229,60 @@ Link your new runbook from the `docs/runbooks/README.md` index.
 
 ---
 
-## Dependency Version Consistency
+## Gitleaks false positives
 
-The monorepo enforces that shared dependencies stay on a single, aligned version
-across every `packages/*` and `apps/*` workspace. Version drift is caught
-automatically in CI by **syncpack** — the `dep-consistency` job runs
-`pnpm syncpack:check` (`syncpack list-mismatches`) and fails the build on any
-mismatch among the dependencies listed in [`syncpack.config.json`](./syncpack.config.json)
-(typescript, vitest, tsup, `@vitest/coverage-v8`, zod, `@types/node`, the React /
-testing-library stack, and the shared Radix UI packages).
+Commits are blocked by [`scripts/gitleaks.mjs`](../scripts/gitleaks.mjs) via the
+[`.husky/pre-commit`](../.husky/pre-commit) hook (`pnpm gitleaks:pre-commit` — pipes
+`git diff --cached` into `gitleaks detect --pipe --redact --config .gitleaks.toml`).
+If a fixture or test value that *looks* like a secret triggers a false positive (e.g.
+a Stellar `S...` key in a test fixture), add a scoped allowlist entry to
+[`.gitleaks.toml`](../.gitleaks.toml) instead of bypassing the hook.
 
-**Policy**
+### Allowlist syntax (`.gitleaks.toml`)
 
-- Shared dependencies must use an identical version specifier everywhere they
-  appear. Do not introduce caret (`^`) ranges for these dependencies in one
-  workspace while another pins them exactly.
-- To change a shared dependency's version, update **every** workspace that uses
-  it in the same PR, then commit the regenerated `pnpm-lock.yaml`.
-- Run `pnpm syncpack:check` locally before pushing to catch drift early.
+Gitleaks uses TOML. Add a per-rule `[[rules.allowlist]]` (or a global `[allowlist]`)
+with a `description`, `regexes`/`regex`, and/or `paths`. Keep the entry as narrow
+as possible — pin it to a single file/path and a single secret-looking pattern.
 
-### zod version policy
+**Concrete example — allow a fake Stellar secret only inside test fixtures:**
 
-`zod` is declared as a direct runtime dependency in `apps/api`, `apps/web`, and
-`apps/deposit-monitor`. All three workspaces **must always declare the same
-exact version** and it is currently `4.3.6`.
+```toml
+# .gitleaks.toml
+[[rules]]
+id = "stellar-secret-key"
+description = "Stellar secret key (S...)"
+regex = '''\bS[ABCDEFGHIJKLMNOPQRSTUVWXYZ234567]{55}\b'''
+tags = ["stellar", "secret"]
 
-**Why this matters more than other shared dependencies:**
+  [[rules.allowlist]]
+  description = "test fixture with fake S... key — not a real secret"
+  # Only suppress inside fixtures; change the path to the file that holds the false positive.
+  paths = ['''apps/api/scripts/fixtures/.*''']
+  # Optionally pin to the exact fake value:
+  # regexes = ['''SBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB''']
+```
 
-- `apps/api` uses zod schemas to define every API request/response contract and
-  feeds them through `@asteasolutions/zod-to-openapi` to generate the canonical
-  `docs/openapi.yml` (run via `pnpm gen:openapi`).
-- `apps/web` validates API responses against those same schemas at the boundary
-  layer.
-- `apps/deposit-monitor` validates Stellar event payloads using zod schemas that
-  must be compatible with the types the API emits.
+Alternative global form (use sparingly):
 
-A zod version mismatch between these three apps does **not** produce a
-TypeScript error or a failed test — it silently diverges runtime validation
-behaviour. For example, a new coercion rule or a changed `.parse()` error shape
-in one workspace will not surface until a request hits the wrong consumer in
-production.
+```toml
+[allowlist]
+description = "allow fake keys in fixtures"
+paths = ['''apps/api/scripts/fixtures/.*''']
+```
 
-**When bumping zod:**
+After editing `.gitleaks.toml`, re-stage the config and retry the commit — the
+pre-commit hook (`scripts/gitleaks.mjs`) will re-run automatically.
 
-1. Update `zod` in `apps/api/package.json`, `apps/web/package.json`, and
-   `apps/deposit-monitor/package.json` in a **single PR**.
-2. Review the zod release notes for breaking changes in `.parse()`, `.safeParse()`,
-   error shapes, and coercion behaviour.
-3. Run `pnpm gen:openapi:check` (in `apps/api`) to confirm the generated OpenAPI
-   spec is unchanged or intentionally updated.
-4. Commit the regenerated `pnpm-lock.yaml`.
-5. `pnpm syncpack:check` will fail CI if you miss any of the three files.
+### Do not use `--no-verify`
 
-### Pinned tooling review policy (knip)
+> **Git Safety Protocol:** never bypass commit hooks with `git commit --no-verify`
+> (or `HUSKY=0`) to silence a gitleaks finding. That disables secret scanning for
+> the entire commit and risks landing a real credential. Always add a scoped
+> allowlist entry as shown above and keep the hook enabled.
 
-`apps/web` pins `knip` to an **exact** version (no caret range) on purpose.
-knip's unused-code detection rules change across minor releases and can start or
-stop flagging exports, which would otherwise fail CI unexpectedly on an
-unrelated PR when a caret-permitted upgrade lands.
-
-- Bumping `knip` is a **deliberate, manual** change. Review the upstream release
-  notes and run `pnpm --filter @brandblitz/web knip` locally to confirm the new
-  rules produce only expected findings before merging.
-- The same exact-pinning convention applies to the `@testing-library/*` packages
-  in `apps/web` (e.g. `@testing-library/react`, `@testing-library/dom`) so that
-  CI always resolves the same test-toolchain minor that was verified locally.
-
-### Pre-1.0 native-binding packages (`@napi-rs/canvas`)
-
-`apps/api` depends on `@napi-rs/canvas` (currently `0.1.97`), an exact-pinned
-pre-1.0 native-binding (compiled Rust/N-API) package used for server-side
-image rendering. Because it's pre-1.0, npm/dependabot classify a
-`0.x.y -> 0.x+1.0` bump as "minor" even though — per SemVer's own spec — a
-pre-1.0 minor bump is allowed to be breaking. A silently-broken native
-binding (wrong prebuilt binary for the platform, a changed API surface, a
-corrupted encode) fails at runtime, not at typecheck.
-
-- Any `@napi-rs/canvas` version bump requires **manual review**, even patch
-  and minor updates. [`.github/workflows/dependabot-automerge.yml`](.github/workflows/dependabot-automerge.yml)
-  excludes it from auto-merge specifically for this reason — a Dependabot PR
-  bumping it will not be auto-approved or auto-merged like other
-  patch/minor updates.
-- [`apps/api/src/canvas-smoke.test.ts`](apps/api/src/canvas-smoke.test.ts) is
-  a regression guard that exercises the real native rendering pipeline
-  (canvas creation, 2D context drawing, PNG encoding, magic-byte
-  verification) as part of the normal `pnpm --filter @brandblitz/api test`
-  run, so CI fails if a bump breaks the native binding.
-- Before merging a bump: run `pnpm --filter @brandblitz/api test` locally on
-  the target platform/architecture and review the package's release notes
-  for API changes.
+See also: [`scripts/gitleaks.mjs`](../scripts/gitleaks.mjs) (binary download + invocation),
+[`.gitleaks.toml`](../.gitleaks.toml) (rule definitions), and
+[`docs/runbooks/leaked-secret.md`](../docs/runbooks/leaked-secret.md) (what to do if a real secret leaked).
 
 ---
 
@@ -372,7 +323,28 @@ pnpm type-check
 pnpm lint
 ```
 
-> Editor/IDE backup files (`*.bak`) should never be committed — they're covered by `.gitignore`, but double-check `git status` before committing if your editor creates them somewhere unusual.
+### Fast feedback while iterating (recommended)
+
+For iterative work on a single package, use watch-mode type-checking instead of the full
+monorepo `pnpm type-check`. It runs `tsc --watch --noEmit` in the selected workspace
+and re-checks incrementally on every save:
+
+```bash
+# API only
+pnpm type-check:watch --filter=@brandblitz/api
+
+# Web only
+pnpm type-check:watch --filter=@brandblitz/web
+# Or directly in the workspace:
+pnpm --filter @brandblitz/api type-check:watch
+pnpm --filter @brandblitz/web type-check:watch
+```
+
+The root `type-check:watch` script is a convenience wrapper around `turbo run type-check:watch`
+filtered with `--filter`; pass a different `--filter` value to scope to another workspace.
+Each workspace exposes `type-check:watch` as `tsc --watch --noEmit` (see `apps/api/package.json`
+and `apps/web/package.json`). The existing full `pnpm type-check` (`turbo run type-check`) is unchanged
+and remains the CI gate — use the watch variant only for local iteration.
 
 ### Common Issues
 
