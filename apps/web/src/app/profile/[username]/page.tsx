@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatScore, formatUsdc, safeDivide } from "@/lib/format";
 import { StreakBadge } from "@/components/gamification/streak-badge";
-import { StreakHeatmap } from "@/components/gamification/StreakHeatmap";
+import { StreakHeatmap } from "@/components/gamification/streak-heatmap";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -304,6 +304,14 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {isOwner && (
+        <p className="mb-8 text-xs text-[var(--muted-foreground)]">
+          <Link href="/docs/guides/streaks-explained" className="underline hover:text-[var(--foreground)]">
+            How do streaks work?
+          </Link>
+        </p>
       )}
 
       {/* Stats */}
